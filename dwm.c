@@ -61,7 +61,8 @@ enum { CurNormal, CurResize, CurMove, CurLast }; /* cursor */
 enum { SchemeNorm, SchemeSel }; /* color schemes */
 enum { NetSupported, NetWMName, NetWMState, NetWMCheck,
        NetWMFullscreen, NetActiveWindow, NetWMWindowType,
-       NetWMWindowTypeDialog, NetClientList, NetLast }; /* EWMH atoms */
+       NetWMWindowTypeDialog, NetClientList, NetWMWindowOpacity,
+       NetLast }; /* EWMH atoms */
 enum { WMProtocols, WMDelete, WMState, WMTakeFocus, WMLast }; /* default atoms */
 enum { ClkTagBar, ClkLtSymbol, ClkStatusText, ClkWinTitle,
        ClkClientWin, ClkRootWin, ClkLast }; /* clicks */
@@ -85,7 +86,7 @@ typedef struct Monitor Monitor;
 typedef struct Client Client;
 struct Client {
 	char name[256];
-	float mina, maxa;
+	float mina, maxa, alpha;
 	int x, y, w, h;
 	int oldx, oldy, oldw, oldh;
 	int basew, baseh, incw, inch, maxw, maxh, minw, minh, hintsvalid;
@@ -137,10 +138,12 @@ typedef struct {
 	const char *title;
 	unsigned int tags;
 	int isfloating;
+	float alpha;
 	int monitor;
 } Rule;
 
 /* function declarations */
+static void alpha(const Arg *arg);
 static void applyrules(Client *c);
 static int applysizehints(Client *c, int *x, int *y, int *w, int *h, int interact);
 static void arrange(Monitor *m);
@@ -184,6 +187,7 @@ static void monocle(Monitor *m);
 static void motionnotify(XEvent *e);
 static void movemouse(const Arg *arg);
 static Client *nexttiled(Client *c);
+static void opacity(Client *c, float alpha);
 static void pop(Client *c);
 static void propertynotify(XEvent *e);
 static void quit(const Arg *arg);
@@ -275,6 +279,28 @@ struct NumTags { char limitexceeded[LENGTH(tags) > 31 ? -1 : 1]; };
 
 /* function implementations */
 void
+alpha(const Arg *arg)
+{
+	Client *c = selmon->sel;
+	float a = arg->f;
+
+	if (!c)
+		return;
+	if (a == -1) {
+		opacity(c, a);
+	} else if (a >= 0 && a <= 1) {
+		opacity(c, a);
+	} else {
+		if (a > 1)
+			a--;
+		else
+			a++;
+		a += c->alpha;
+		opacity(c, a);
+	}
+}
+
+void
 applyrules(Client *c)
 {
 	const char *class, *instance;
@@ -296,6 +322,7 @@ applyrules(Client *c)
 		&& (!r->class || strstr(class, r->class))
 		&& (!r->instance || strstr(instance, r->instance)))
 		{
+			c->alpha = r->alpha;
 			c->isfloating = r->isfloating;
 			c->tags |= r->tags;
 			for (m = mons; m && m->num != r->monitor; m = m->next);
@@ -1073,6 +1100,9 @@ manage(Window w, XWindowAttributes *wa)
 		c->isfloating = c->oldstate = trans != None || c->isfixed;
 	if (c->isfloating)
 		XRaiseWindow(dpy, c->win);
+	if (c->alpha == 0)
+		c->alpha = defaultalpha;
+	opacity(c, c->alpha);
 	attach(c);
 	attachstack(c);
 	XChangeProperty(dpy, root, netatom[NetClientList], XA_WINDOW, 32, PropModeAppend,
@@ -1206,6 +1236,40 @@ nexttiled(Client *c)
 {
 	for (; c && (c->isfloating || !ISVISIBLE(c)); c = c->next);
 	return c;
+}
+
+void
+opacity(Client *c, float a)
+{
+	unsigned int o;
+	Atom da;
+	int di;
+	unsigned long dl;
+	unsigned char *p;
+
+	if (a == -1) {
+		if (XGetWindowProperty(dpy, c->win, netatom[NetWMWindowOpacity], 0L,
+					1L, False, XA_CARDINAL, &da, &di, &dl, &dl, &p) == Success
+				&& p == None) {
+			a = c->alpha;
+			XFree(p);
+		} else {
+			a = 1;
+		}
+	} else {
+		if (a > 1)
+			a = 1;
+		if (a < 0)
+			a = 0;
+		c->alpha = a;
+	}
+	if (a == 1) {
+		XDeleteProperty(dpy, c->win, netatom[NetWMWindowOpacity]);
+	} else {
+		o = (double) a * 0xffffffff;
+		XChangeProperty(dpy, c->win, netatom[NetWMWindowOpacity], XA_CARDINAL,
+			32, PropModeReplace, (unsigned char *) &o, 1L);
+	}
 }
 
 void
@@ -1578,6 +1642,7 @@ setup(void)
 	netatom[NetWMWindowType] = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE", False);
 	netatom[NetWMWindowTypeDialog] = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_DIALOG", False);
 	netatom[NetClientList] = XInternAtom(dpy, "_NET_CLIENT_LIST", False);
+	netatom[NetWMWindowOpacity] = XInternAtom(dpy, "_NET_WM_WINDOW_OPACITY", False);
 	/* init cursors */
 	cursor[CurNormal] = drw_cur_create(drw, XC_left_ptr);
 	cursor[CurResize] = drw_cur_create(drw, XC_sizing);
