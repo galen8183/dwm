@@ -56,6 +56,7 @@ static const Rule rules[] = {
 	{ NULL,          NULL,     "/usr/bin/Xnest", 0,         0,          0,           1,         1,     -1 },
 	{ "org-openstreetmap-josm-gui-MainApplication",
 		             NULL,     NULL,             1 << 7,    0,          0,           1,         1,     -1 },
+	{ "qgis",        NULL,     NULL,             0,         0,          0,           0,         1,     -1 },
 };
 
 /* layout(s) */
@@ -117,8 +118,8 @@ static const Key keys[] = {
 	{ MODKEY,                       XK_period, focusmon,       {.i = +1 } },
 	{ MODKEY|ShiftMask,             XK_comma,  tagmon,         {.i = -1 } },
 	{ MODKEY|ShiftMask,             XK_period, tagmon,         {.i = +1 } },
-	{ MODKEY|ShiftMask,             XK_w,      alpha,          {.f = -1} },
-	{ MODKEY|ShiftMask,             XK_e,      alpha,          {.f = defaultalpha} },
+	{ MODKEY,                       XK_w,      alpha,          {.f = -1} },
+	{ MODKEY,                       XK_e,      alpha,          {.f = defaultalpha} },
 	{ MODKEY|ShiftMask,             XK_r,      alpha,          {.f = -1.1 } },
 	{ MODKEY|ShiftMask,             XK_t,      alpha,          {.f = 1.1 } },
 	TAGKEYS(                        XK_1,                      0)
